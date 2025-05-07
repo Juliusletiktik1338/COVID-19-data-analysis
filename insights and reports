@@ -1,0 +1,160 @@
+1. Executive Summary Template
+def generate_executive_summary(df, focus_country="Kenya"):
+    latest_date = df['date'].max()
+    summary = f"""
+    # COVID-19 Analysis Report ({latest_date.strftime('%Y-%m-%d')})
+    
+    ## Key Findings
+    
+    1. **Global Impact**: As of {latest_date.strftime('%B %Y')}, the dataset contains:
+       - {df['total_cases'].sum():,.0f} total cases worldwide
+       - {df['total_deaths'].sum():,.0f} total deaths
+       - {df['total_vaccinations'].sum():,.0f} vaccine doses administered
+    
+    2. **{focus_country} Overview**:
+       - Total cases: {df[df['location']==focus_country]['total_cases'].iloc[-1]:,.0f}
+       - Total deaths: {df[df['location']==focus_country]['total_deaths'].iloc[-1]:,.0f}
+       - Vaccination rate: {df[df['location']==focus_country]['people_fully_vaccinated_per_hundred'].iloc[-1]:.1f}% fully vaccinated
+    
+    3. **Trend Analysis**:
+       - Current 7-day average: {df[df['location']==focus_country]['new_cases_smoothed'].iloc[-1]:,.0f} cases/day
+       - Peak infection rate: {df[df['location']==focus_country]['new_cases_smoothed'].max():,.0f} cases/day
+    """
+    return summary
+
+2. Comparative Country Analysis
+print(country_comparison_report(df))
+def country_comparison_report(df, countries=["Kenya", "United States", "India"]):
+    latest = df[df['date'] == df['date'].max()]
+    report = "## Comparative Country Analysis\n\n"
+    
+    # Cases comparison
+    cases = latest[latest['location'].isin(countries)][['location','total_cases_per_million']]\
+            .sort_values('total_cases_per_million', ascending=False)
+    report += "### Cases per Million Population\n"
+    report += cases.to_markdown(index=False) + "\n\n"
+    
+    # Vaccination comparison
+    vacc = latest[latest['location'].isin(countries)][['location','people_fully_vaccinated_per_hundred']]\
+           .sort_values('people_fully_vaccinated_per_hundred', ascending=False)
+    report += "### Full Vaccination Coverage (% Population)\n"
+    report += vacc.to_markdown(index=False) + "\n\n"
+    
+    # Mortality analysis
+    mortality = latest[latest['location'].isin(countries)][['location','total_deaths_per_million']]\
+               .sort_values('total_deaths_per_million', ascending=False)
+    report += "### Deaths per Million Population\n"
+    report += mortality.to_markdown(index=False)
+    
+    return report
+    
+    3. Time-Series Trend Analysis
+    
+    def generate_trend_analysis(df, country="Kenya", window=30):
+    country_df = df[df['location']==country].copy()
+    country_df['rolling_cases'] = country_df['new_cases'].rolling(window).mean()
+    
+    analysis = f"""
+    ## Time-Series Trend Analysis: {country}
+    
+    ### Case Growth Patterns
+    1. **Recent Trend**: Last {window}-day average: {country_df['rolling_cases'].iloc[-1]:,.0f} cases/day
+    2. **Peak Comparison**: {country_df['new_cases'].max()/country_df['rolling_cases'].iloc[-1]:.1f}x higher than current average
+    3. **Wave Identification**: """
+    
+    # Detect waves (simplified)
+    peaks = country_df[country_df['new_cases'] > country_df['new_cases'].quantile(0.9)]
+    if len(peaks) > 0:
+        analysis += f"Detected {len(peaks)} significant waves with peak at {peaks['date'].dt.strftime('%B %Y').mode()[0]}"
+    
+    # Vaccination impact analysis
+    if 'people_vaccinated' in country_df.columns:
+        vax_start = country_df[country_df['people_vaccinated'] > 0]['date'].min()
+        analysis += f"\n\n### Vaccination Impact\n- Campaign began: {vax_start.strftime('%B %Y')}\n"
+        
+        pre_vax = country_df[country_df['date'] < vax_start]['new_cases'].mean()
+        post_vax = country_df[country_df['date'] >= vax_start]['new_cases'].mean()
+        analysis += f"- Average daily cases:\n  - Pre-vaccination: {pre_vax:,.0f}\n  - Post-vaccination: {post_vax:,.0f}"
+    
+    return analysis
+
+print(generate_trend_analysis(df))
+
+4. Automated PDF Report Generat
+from fpdf import FPDF
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def create_pdf_report(df, filename="covid_report.pdf"):
+    # Initialize PDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # Add title
+    pdf.cell(200, 10, txt="COVID-19 Analysis Report", ln=1, align='C')
+    
+    # Add summary section
+    pdf.set_font("Arial", 'B', size=12)
+    pdf.cell(200, 10, txt="Executive Summary", ln=1)
+    pdf.set_font("Arial", size=10)
+    summary = generate_executive_summary(df)
+    pdf.multi_cell(0, 5, txt=summary.strip())
+    
+    # Add visualizations
+    pdf.add_page()
+    pdf.cell(200, 10, txt="Key Visualizations", ln=1)
+    
+    # Case trend plot
+    plt.figure(figsize=(8,4))
+    sns.lineplot(data=df[df['location']=='Kenya'], x='date', y='new_cases_smoothed')
+    plt.title("Kenya: Daily COVID-19 Cases")
+    plt.savefig("temp_plot.png")
+    pdf.image("temp_plot.png", x=10, y=30, w=180)
+    
+    # Vaccination plot
+    plt.figure(figsize=(8,4))
+    sns.lineplot(data=df[df['location']=='Kenya'], x='date', y='people_fully_vaccinated_per_hundred')
+    plt.title("Kenya: Vaccination Coverage")
+    plt.savefig("temp_plot2.png")
+    pdf.image("temp_plot2.png", x=10, y=120, w=180)
+    
+    # Save PDF
+    pdf.output(filename)
+    return f"PDF report generated: {filename}"
+
+create_pdf_report(df)
+
+5 risk assesment
+
+def risk_assessment(df):
+    latest = df[df['date'] == df['date'].max()]
+    latest = latest.dropna(subset=['new_cases_smoothed_per_million', 'total_deaths_per_million'])
+    
+    # Calculate risk scores
+    latest['case_risk'] = pd.qcut(latest['new_cases_smoothed_per_million'], 
+                                  q=5, labels=[1, 2, 3, 4, 5])
+    latest['death_risk'] = pd.qcut(latest['total_deaths_per_million'], 
+                                  q=5, labels=[1, 2, 3, 4, 5])
+    latest['combined_risk'] = latest['case_risk'].astype(int) + latest['death_risk'].astype(int)
+    
+    # Generate report
+    high_risk = latest.sort_values('combined_risk', ascending=False).head(5)
+    improving = latest[latest['new_cases_smoothed'] < latest['new_cases_smoothed'].quantile(0.2)]
+    
+    report = """
+    ## Regional Risk Assessment
+    
+    ### Highest Risk Countries (Current)
+    """ + high_risk[['location', 'new_cases_smoothed_per_million', 'total_deaths_per_million']]\
+        .to_markdown(index=False) + """
+    
+    ### Most Improved Regions
+    """ + improving[['location', 'new_cases_smoothed_per_million']]\
+        .sort_values('new_cases_smoothed_per_million').head(5)\
+        .to_markdown(index=False)
+    
+    return report
+
+print(risk_assessment(df))
+4. Automated PDF Report Generation
